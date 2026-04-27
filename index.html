@@ -790,11 +790,15 @@ function randCode() {
 }
 
 function freshState() {
+  // Use keyed objects instead of arrays — Firebase strips null array slots on write,
+  // causing index misalignment when reading back. Object keys are always preserved.
+  const board = {};
+  for (let i = 0; i < 9; i++) board[String(i)] = null;
   return {
-    board: Array(9).fill(null),
+    board,
     currentPlayer: 1,
     phase: 'drop',
-    placed: [0, 0],
+    placed: { '0': 0, '1': 0 },
     positionHistory: [],
     gameOver: false,
     stalemateWarn: '',
@@ -910,7 +914,22 @@ function subscribeRoom() {
       return;
     }
 
-    const data = snap.val();
+    const raw  = snap.val();
+
+    // Firebase turns arrays-with-nulls into objects like {0:1, 2:2}.
+    // We must normalize board and placed back into real JS arrays.
+    const board = Array.from({length: 9}, (_, i) =>
+      (raw.board && raw.board[i] !== undefined) ? raw.board[i] : null
+    );
+    const placed = Array.from({length: 2}, (_, i) => {
+      const v = raw.placed && (raw.placed[i] !== undefined ? raw.placed[i] : raw.placed[String(i)]);
+      return v !== undefined ? Number(v) : 0;
+    });
+    const positionHistory = Array.isArray(raw.positionHistory)
+      ? raw.positionHistory
+      : Object.values(raw.positionHistory || {});
+
+    const data = { ...raw, board, placed, positionHistory };
     gameState  = data;
     houseRules = data.houseRules || false;
     document.getElementById('btn-house-rules').textContent = `House Rules: ${houseRules ? 'On' : 'Off'}`;
@@ -937,7 +956,18 @@ function cleanup() {
 
 async function pushState(newState) {
   if (!roomRef) return;
-  await update(roomRef, newState);
+  // Firebase drops null slots from arrays, breaking index alignment on read-back.
+  // Serialize board as a keyed object so all 9 slots are always preserved.
+  const toWrite = { ...newState };
+  if (newState.board) {
+    const boardObj = {};
+    for (let i = 0; i < 9; i++) boardObj[String(i)] = newState.board[i] ?? null;
+    toWrite.board = boardObj;
+  }
+  if (newState.placed) {
+    toWrite.placed = { '0': newState.placed[0] ?? 0, '1': newState.placed[1] ?? 0 };
+  }
+  await update(roomRef, toWrite);
 }
 
 // ── Turn check ───────────────────────────────────────────────────────────────
