@@ -617,7 +617,19 @@ async function handlePointClick(idx) {
     newBoard[localSel] = null;
     localSel = null;
 
-    
+    const snapStr = newBoard.join('');
+    const hist    = [...gs.positionHistory, snapStr];
+    const repeats = hist.filter(s => s === snapStr).length;
+
+    if (repeats > 2) {
+      await pushState({ board: newBoard, positionHistory: hist,
+        gameOver: true, winLine: null, stalemateWarn: '' });
+      return;
+    }
+
+    const warn = repeats === 2
+      ? '⚠ Repeated position — one more repeat means a draw!'
+      : '';
     const wl = findWinLine(newBoard, gs.currentPlayer);
     if (wl) {
       await pushState({ board: newBoard, positionHistory: hist, gameOver: true, winLine: wl,
