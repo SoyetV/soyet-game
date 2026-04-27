@@ -617,29 +617,33 @@ async function handlePointClick(idx) {
     newBoard[localSel] = null;
     localSel = null;
 
-    const snapStr = newBoard.join('');
-    const hist    = [...gs.positionHistory, snapStr];
-    const repeats = hist.filter(s => s === snapStr).length;
+    const hist = [...gs.positionHistory, newBoard.join('')];
 
-    if (repeats > 2) {
-      await pushState({ board: newBoard, positionHistory: hist,
-        gameOver: true, winLine: null, stalemateWarn: '' });
-      return;
-    }
-
-    const warn = repeats === 2
-      ? '⚠ Repeated position — one more repeat means a draw!'
-      : '';
     const wl = findWinLine(newBoard, gs.currentPlayer);
     if (wl) {
-      await pushState({ board: newBoard, positionHistory: hist, gameOver: true, winLine: wl,
-        stalemateWarn: '', currentPlayer: gs.currentPlayer, placed: gs.placed, phase: gs.phase });
+      await pushState({
+  board: newBoard,
+  positionHistory: hist,
+  currentPlayer: nextP,
+  phase: gs.phase,
+  gameOver: false,
+  winLine: null,
+  stalemateWarn: '',
+  placed: gs.placed
+});
       return;
     }
     const nextP = gs.currentPlayer === 1 ? 2 : 1;
-    await pushState({ board: newBoard, positionHistory: hist, currentPlayer: nextP,
-      phase: gs.phase, gameOver: false, winLine: null,
-      stalemateWarn: warn, placed: gs.placed });
+    await pushState({
+  board: newBoard,
+  positionHistory: hist,
+  currentPlayer: nextP,
+  phase: gs.phase,
+  gameOver: false,
+  winLine: null,
+  stalemateWarn: '',
+  placed: gs.placed
+});
   }
 }
 
