@@ -590,15 +590,7 @@
   .help-panel p:last-child { margin-bottom: 0; }
   .help-panel strong { color: var(--text); font-weight: 600; }
 
-  #board-block {
-    position: absolute;
-    inset: 0;
-    z-index: 40;
-    cursor: not-allowed;
-    display: none;
-    border-radius: 12px;
-  }
-  #board-block.active { display: block; }
+  /* FIX: Removed #board-block entirely — we handle turn enforcement in JS click handlers instead */
 
   #room-strip {
     position: relative;
@@ -638,6 +630,10 @@
   }
 
   #room-strip button:hover { color: var(--accent); }
+
+  /* Board cursor changes based on whose turn it is */
+  .board-wrap.my-turn { cursor: pointer; }
+  .board-wrap.not-my-turn { cursor: not-allowed; }
 
   .hidden { display: none !important; }
 </style>
@@ -711,7 +707,7 @@
   <div class="board-wrap" id="board-wrap">
     <div class="board-bg"></div>
     <svg class="board-svg" id="board-svg" viewBox="0 0 420 420"></svg>
-    <div id="board-block"></div>
+    <!-- REMOVED #board-block div — it was swallowing all clicks. Turn enforcement is in JS. -->
   </div>
 
   <div class="stalemate-warning" id="stalemate-warn"></div>
@@ -740,13 +736,11 @@
   <p><strong>House Rules:</strong> Move to any empty spot (not just adjacent).</p>
 </div>
 
-<!-- Firebase SDK — using CDN module imports (no npm needed) -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getDatabase, ref, set, get, onValue, update, off, remove }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
-// ── Firebase config (your project) ──────────────────────────────────────────
 const firebaseConfig = {
   apiKey:            "AIzaSyDDZUxJINDqh1DytLd-sjsQ5lOQz4BLDPQ",
   authDomain:        "soyet-d2eb2.firebaseapp.com",
@@ -756,7 +750,6 @@ const firebaseConfig = {
   messagingSenderId: "785114975207",
   appId:             "1:785114975207:web:44c9e78adbf59118258b42"
 };
-// ────────────────────────────────────────────────────────────────────────────
 
 const app = initializeApp(firebaseConfig);
 const db  = getDatabase(app);
@@ -922,6 +915,7 @@ function subscribeRoom() {
     houseRules = data.houseRules || false;
     document.getElementById('btn-house-rules').textContent = `House Rules: ${houseRules ? 'On' : 'Off'}`;
 
+    // FIX: When P2 joins, P1's waiting screen transitions to the game screen here
     if (myPlayer === 1 && data.players.p2 &&
         !document.getElementById('waiting-screen').classList.contains('hidden')) {
       showGame();
@@ -946,12 +940,15 @@ async function pushState(newState) {
   await update(roomRef, newState);
 }
 
-// ── Game logic ───────────────────────────────────────────────────────────────
+// ── Turn check ───────────────────────────────────────────────────────────────
+// FIX: Also check that both players are present (players.p2 must be true)
 function isMyTurn() {
   if (!gameState || gameState.gameOver) return false;
+  if (!gameState.players || !gameState.players.p2) return false; // game hasn't started
   return gameState.currentPlayer === myPlayer;
 }
 
+// ── Game logic ───────────────────────────────────────────────────────────────
 async function handlePointClick(i) {
   if (!isMyTurn()) return;
   const gs = gameState;
@@ -968,7 +965,6 @@ async function handlePointClick(i) {
       await pushState({ board: newBoard, placed: newPlaced, gameOver: true, winLine,
         currentPlayer: gs.currentPlayer, phase: gs.phase,
         positionHistory: gs.positionHistory, stalemateWarn: '' });
-      setTimeout(() => showWin(gs.currentPlayer), 100);
       return;
     }
 
@@ -983,6 +979,7 @@ async function handlePointClick(i) {
     return;
   }
 
+  // Move phase — destination click
   if (gs.phase === 'move' && localSel !== null) {
     const canMove = houseRules ? true : ADJ[localSel].includes(i);
     if (!canMove) return;
@@ -1000,7 +997,6 @@ async function handlePointClick(i) {
     if (repeats >= 2) {
       await pushState({ board: newBoard, positionHistory: hist,
         gameOver: true, winLine: null, stalemateWarn: '' });
-      setTimeout(showDraw, 100);
       return;
     }
 
@@ -1010,7 +1006,6 @@ async function handlePointClick(i) {
       await pushState({ board: newBoard, positionHistory: hist, gameOver: true, winLine,
         stalemateWarn: '', currentPlayer: gs.currentPlayer,
         placed: gs.placed, phase: gs.phase });
-      setTimeout(() => showWin(gs.currentPlayer), 100);
       return;
     }
 
@@ -1046,7 +1041,7 @@ function renderAll() {
   renderPoints();
   renderStatus();
   renderPips();
-  renderBlocker();
+  renderBoardCursor(); // FIX: visual cursor hint instead of blocking overlay
   document.getElementById('stalemate-warn').textContent = gameState.stalemateWarn || '';
 
   if (gameState.gameOver) {
@@ -1056,11 +1051,16 @@ function renderAll() {
   }
 }
 
-function renderBlocker() {
-  const bl = document.getElementById('board-block');
-  (!gameState || gameState.gameOver || !isMyTurn())
-    ? bl.classList.add('active')
-    : bl.classList.remove('active');
+// FIX: Replace renderBlocker (which blocked all clicks) with a CSS cursor hint only
+function renderBoardCursor() {
+  const wrap = document.getElementById('board-wrap');
+  if (!gameState || gameState.gameOver || !isMyTurn()) {
+    wrap.classList.remove('my-turn');
+    wrap.classList.add('not-my-turn');
+  } else {
+    wrap.classList.add('my-turn');
+    wrap.classList.remove('not-my-turn');
+  }
 }
 
 function renderSVG() {
@@ -1099,6 +1099,8 @@ function renderPoints() {
       (houseRules || ADJ[localSel].includes(i));
 
     if (isHL) el.classList.add('highlight');
+
+    // FIX: Always attach the click listener — isMyTurn() is checked inside the handler
     el.addEventListener('click', () => handlePointClick(i));
     wrap.appendChild(el);
   }
@@ -1135,12 +1137,12 @@ function renderStatus() {
   document.getElementById('phase-name').textContent = gs.phase === 'drop' ? 'Drop Phase' : 'Move Phase';
 
   let turnMsg;
-  if (gs.gameOver)          turnMsg = 'Game over';
-  else if (!gs.players?.p2) turnMsg = 'Waiting for opponent…';
-  else if (!isMyTurn())     turnMsg = `Waiting for Player ${gs.currentPlayer}…`;
-  else if (gs.phase === 'drop')      turnMsg = 'Your turn — place a piece';
-  else if (localSel !== null)        turnMsg = 'Your turn — choose destination';
-  else                               turnMsg = 'Your turn — select a piece';
+  if (gs.gameOver)                  turnMsg = 'Game over';
+  else if (!gs.players?.p2)         turnMsg = 'Waiting for opponent…';
+  else if (!isMyTurn())             turnMsg = `Waiting for Player ${gs.currentPlayer}…`;
+  else if (gs.phase === 'drop')     turnMsg = 'Your turn — place a piece';
+  else if (localSel !== null)       turnMsg = 'Your turn — choose destination';
+  else                              turnMsg = 'Your turn — select a piece';
 
   document.getElementById('turn-text').textContent = turnMsg;
   document.getElementById('p1-display').className =
