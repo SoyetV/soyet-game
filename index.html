@@ -85,7 +85,6 @@
     z-index: 1;
   }
 
-  /* ── Lobby Screen ── */
   #lobby {
     display: flex;
     flex-direction: column;
@@ -156,13 +155,6 @@
     box-shadow: 0 6px 18px rgba(200,146,58,0.35);
   }
 
-  .btn-primary:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-    transform: none;
-    box-shadow: none;
-  }
-
   .or-divider {
     color: var(--text-dim);
     font-style: italic;
@@ -204,11 +196,7 @@
     justify-content: center;
   }
 
-  .dot-pulse {
-    display: inline-flex;
-    gap: 4px;
-  }
-
+  .dot-pulse { display: inline-flex; gap: 4px; }
   .dot-pulse span {
     width: 5px; height: 5px;
     border-radius: 50%;
@@ -223,11 +211,9 @@
     40% { opacity: 1; transform: scale(1.2); }
   }
 
-  /* ── Connection badge ── */
   #conn-badge {
     position: fixed;
-    top: 14px;
-    right: 14px;
+    top: 14px; right: 14px;
     font-family: 'Cinzel', serif;
     font-size: 0.6rem;
     letter-spacing: 0.15em;
@@ -240,7 +226,6 @@
   #conn-badge.offline { background: rgba(120,40,20,0.8); color: #e88060; border: 1px solid rgba(200,80,40,0.3); }
   #conn-badge.waiting { background: rgba(80,60,20,0.8); color: var(--accent); border: 1px solid rgba(200,146,58,0.3); }
 
-  /* ── Your role badge ── */
   #role-badge {
     position: relative;
     z-index: 1;
@@ -257,7 +242,6 @@
     display: none;
   }
 
-  /* ── Status bar ── */
   .status-bar {
     display: flex;
     align-items: center;
@@ -336,7 +320,6 @@
     margin-top: 2px;
   }
 
-  /* ── Board ── */
   .board-wrap {
     position: relative;
     width: var(--board-size);
@@ -379,7 +362,6 @@
     filter: drop-shadow(0 0 4px rgba(200,146,58,0.4));
   }
 
-  /* ── Points ── */
   .point {
     position: absolute;
     transform: translate(-50%, -50%);
@@ -416,7 +398,6 @@
     50% { box-shadow: 0 0 16px rgba(200,146,58,0.8); }
   }
 
-  /* ── Tokens ── */
   .token {
     position: absolute;
     transform: translate(-50%, -50%);
@@ -449,15 +430,9 @@
   }
 
   .token.selectable { cursor: pointer; }
-
-  .token.selected {
-    transform: translate(-50%, -50%) scale(1.18);
-    z-index: 30;
-  }
-
+  .token.selected { transform: translate(-50%, -50%) scale(1.18); z-index: 30; }
   .token.p1.selected { box-shadow: 0 0 24px rgba(232,213,160,0.8), 0 6px 16px rgba(0,0,0,0.6); }
   .token.p2.selected { box-shadow: 0 0 24px rgba(42,107,138,0.9), 0 6px 16px rgba(0,0,0,0.6); }
-
   .token.winner { animation: winner-pulse 0.6s ease-in-out infinite alternate; }
 
   @keyframes winner-pulse {
@@ -465,7 +440,6 @@
     to   { box-shadow: 0 0 40px var(--win-glow), 0 6px 20px rgba(0,0,0,0.6); transform: translate(-50%,-50%) scale(1.18); }
   }
 
-  /* ── Overlay ── */
   .message-overlay {
     position: fixed;
     inset: 0;
@@ -537,7 +511,6 @@
     box-shadow: 0 8px 20px rgba(200,146,58,0.4);
   }
 
-  /* ── Controls ── */
   .controls {
     display: flex;
     gap: 12px;
@@ -578,11 +551,9 @@
     text-align: center;
   }
 
-  /* ── Help ── */
   .help-toggle {
     position: fixed;
-    bottom: 20px;
-    right: 20px;
+    bottom: 20px; right: 20px;
     width: 36px; height: 36px;
     border-radius: 50%;
     background: rgba(100,60,20,0.5);
@@ -602,8 +573,7 @@
 
   .help-panel {
     position: fixed;
-    bottom: 66px;
-    right: 20px;
+    bottom: 66px; right: 20px;
     background: linear-gradient(160deg, #2a1a08, #1a0d03);
     border: 1px solid rgba(200,146,58,0.3);
     border-radius: 10px;
@@ -620,7 +590,6 @@
   .help-panel p:last-child { margin-bottom: 0; }
   .help-panel strong { color: var(--text); font-weight: 600; }
 
-  /* ── Not-your-turn overlay on board ── */
   #board-block {
     position: absolute;
     inset: 0;
@@ -629,10 +598,8 @@
     display: none;
     border-radius: 12px;
   }
-
   #board-block.active { display: block; }
 
-  /* room info strip */
   #room-strip {
     position: relative;
     z-index: 1;
@@ -682,7 +649,7 @@
 <h1>SOYET</h1>
 <p class="subtitle">The Ancient Grid Game</p>
 
-<!-- ── LOBBY ── -->
+<!-- LOBBY -->
 <div id="lobby">
   <div class="lobby-card">
     <h2>Create a Room</h2>
@@ -701,7 +668,7 @@
   <p id="lobby-error" style="color:#c06030;font-style:italic;font-size:0.85rem;min-height:1.2em;text-align:center;"></p>
 </div>
 
-<!-- ── WAITING SCREEN (inside lobby card) ── -->
+<!-- WAITING -->
 <div id="waiting-screen" class="hidden" style="position:relative;z-index:1;text-align:center;">
   <div class="lobby-card">
     <h2>Room Created!</h2>
@@ -715,7 +682,7 @@
   </div>
 </div>
 
-<!-- ── GAME SCREEN ── -->
+<!-- GAME -->
 <div id="game-screen" class="hidden">
   <div id="role-badge">You are Player <span id="role-num">1</span></div>
 
@@ -773,12 +740,12 @@
   <p><strong>House Rules:</strong> Move to any empty spot (not just adjacent).</p>
 </div>
 
-<!-- Firebase SDK -->
+<!-- Firebase SDK — using CDN module imports (no npm needed) -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getDatabase, ref, set, get, onValue, update, off, remove }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
- 
+
 // ── Firebase config (your project) ──────────────────────────────────────────
 const firebaseConfig = {
   apiKey:            "AIzaSyDDZUxJINDqh1DytLd-sjsQ5lOQz4BLDPQ",
@@ -790,12 +757,10 @@ const firebaseConfig = {
   appId:             "1:785114975207:web:44c9e78adbf59118258b42"
 };
 // ────────────────────────────────────────────────────────────────────────────
- 
+
 const app = initializeApp(firebaseConfig);
 const db  = getDatabase(app);
 
-
-const analytics = getAnalytics(app);
 // ── Board constants ──────────────────────────────────────────────────────────
 const PAD = 70, BSIZE = 420, STEP = (BSIZE - PAD*2) / 2;
 
@@ -819,15 +784,14 @@ const WIN_LINES = [
 ];
 
 // ── Local state ──────────────────────────────────────────────────────────────
-let myPlayer   = null;  // 1 or 2
+let myPlayer   = null;
 let roomCode   = null;
 let roomRef    = null;
-let gameState  = null;  // mirrors Firebase
-let localSel   = null;  // selected token index (local only)
+let gameState  = null;
+let localSel   = null;
 let houseRules = false;
 let unsubscribe = null;
 
-// ── Utility ──────────────────────────────────────────────────────────────────
 function randCode() {
   return Math.random().toString(36).substring(2,8).toUpperCase();
 }
@@ -854,7 +818,6 @@ function setBadge(state, text) {
   b.textContent = text;
 }
 
-// Test Firebase connectivity
 try {
   const connRef = ref(db, '.info/connected');
   onValue(connRef, snap => {
@@ -892,10 +855,7 @@ document.getElementById('btn-create').addEventListener('click', async () => {
   const code = randCode();
   roomCode = code;
   roomRef  = ref(db, 'rooms/' + code);
-
-  const state = freshState();
-  await set(roomRef, state);
-
+  await set(roomRef, freshState());
   myPlayer = 1;
   showWaiting(code);
   setBadge('waiting', 'WAITING');
@@ -925,25 +885,21 @@ document.getElementById('btn-join').addEventListener('click', async () => {
   roomCode = code;
   roomRef  = ref(db, 'rooms/' + code);
   myPlayer = 2;
-
-  // Mark p2 joined
   await update(ref(db, 'rooms/' + code + '/players'), { p2: true });
-
   showGame();
   setBadge('online', 'ONLINE');
   subscribeRoom();
 });
 
-// ── Cancel waiting ───────────────────────────────────────────────────────────
+// ── Cancel / Leave ───────────────────────────────────────────────────────────
 document.getElementById('btn-cancel-wait').addEventListener('click', async () => {
-  if (roomRef) { await remove(roomRef); }
+  if (roomRef) await remove(roomRef);
   cleanup();
   showLobby();
 });
 
-// ── Leave game ───────────────────────────────────────────────────────────────
 document.getElementById('btn-leave').addEventListener('click', async () => {
-  if (roomRef) { await remove(roomRef); }
+  if (roomRef) await remove(roomRef);
   cleanup();
   showLobby();
   hideOverlay();
@@ -951,10 +907,9 @@ document.getElementById('btn-leave').addEventListener('click', async () => {
 
 // ── Subscribe to room ────────────────────────────────────────────────────────
 function subscribeRoom() {
-  if (unsubscribe) { off(roomRef); }
+  if (unsubscribe) off(roomRef);
   unsubscribe = onValue(roomRef, snap => {
     if (!snap.exists()) {
-      // Room was deleted (other player left)
       cleanup();
       showLobby();
       setBadge('offline', 'OFFLINE');
@@ -963,12 +918,12 @@ function subscribeRoom() {
     }
 
     const data = snap.val();
-    gameState = data;
+    gameState  = data;
     houseRules = data.houseRules || false;
     document.getElementById('btn-house-rules').textContent = `House Rules: ${houseRules ? 'On' : 'Off'}`;
 
-    // Once p2 joins, show game for p1 too
-    if (myPlayer === 1 && data.players.p2 && document.getElementById('waiting-screen').classList.contains('hidden') === false) {
+    if (myPlayer === 1 && data.players.p2 &&
+        !document.getElementById('waiting-screen').classList.contains('hidden')) {
       showGame();
       setBadge('online', 'ONLINE');
     }
@@ -982,16 +937,10 @@ function subscribeRoom() {
 }
 
 function cleanup() {
-  if (roomRef) { off(roomRef); }
-  roomRef   = null;
-  roomCode  = null;
-  myPlayer  = null;
-  gameState = null;
-  localSel  = null;
-  unsubscribe = null;
+  if (roomRef) off(roomRef);
+  roomRef = roomCode = myPlayer = gameState = localSel = unsubscribe = null;
 }
 
-// ── Write move to Firebase ───────────────────────────────────────────────────
 async function pushState(newState) {
   if (!roomRef) return;
   await update(roomRef, newState);
@@ -1009,33 +958,27 @@ async function handlePointClick(i) {
   if (gs.board[i] !== null) return;
 
   if (gs.phase === 'drop') {
-    const newBoard = [...gs.board];
+    const newBoard  = [...gs.board];
     newBoard[i] = gs.currentPlayer;
     const newPlaced = [...gs.placed];
     newPlaced[gs.currentPlayer - 1]++;
 
     const winLine = findWinLine(newBoard, gs.currentPlayer);
     if (winLine) {
-      await pushState({
-        board: newBoard, placed: newPlaced,
-        gameOver: true, winLine,
-        currentPlayer: gs.currentPlayer,
-        phase: gs.phase, positionHistory: gs.positionHistory, stalemateWarn: ''
-      });
+      await pushState({ board: newBoard, placed: newPlaced, gameOver: true, winLine,
+        currentPlayer: gs.currentPlayer, phase: gs.phase,
+        positionHistory: gs.positionHistory, stalemateWarn: '' });
       setTimeout(() => showWin(gs.currentPlayer), 100);
       return;
     }
 
     let newPhase = gs.phase;
-    let nextP    = gs.currentPlayer === 1 ? 2 : 1;
+    const nextP  = gs.currentPlayer === 1 ? 2 : 1;
     if (newPlaced[0] === 3 && newPlaced[1] === 3) newPhase = 'move';
 
-    await pushState({
-      board: newBoard, placed: newPlaced,
-      currentPlayer: nextP, phase: newPhase,
-      gameOver: false, winLine: null,
-      positionHistory: gs.positionHistory, stalemateWarn: ''
-    });
+    await pushState({ board: newBoard, placed: newPlaced, currentPlayer: nextP,
+      phase: newPhase, gameOver: false, winLine: null,
+      positionHistory: gs.positionHistory, stalemateWarn: '' });
     localSel = null;
     return;
   }
@@ -1049,37 +992,32 @@ async function handlePointClick(i) {
     newBoard[localSel] = null;
     localSel = null;
 
-    const snap = newBoard.join('');
-    const hist = [...(gs.positionHistory || [])];
-    const repeats = hist.filter(s => s === snap).length;
-    hist.push(snap);
+    const snapStr = newBoard.join('');
+    const hist    = [...(gs.positionHistory || [])];
+    const repeats = hist.filter(s => s === snapStr).length;
+    hist.push(snapStr);
 
     if (repeats >= 2) {
-      await pushState({ board: newBoard, positionHistory: hist, gameOver: true, winLine: null, stalemateWarn: '' });
+      await pushState({ board: newBoard, positionHistory: hist,
+        gameOver: true, winLine: null, stalemateWarn: '' });
       setTimeout(showDraw, 100);
       return;
     }
 
-    const warn = repeats === 1 ? '⚠ Repeated position — one more repeat means a draw!' : '';
+    const warn    = repeats === 1 ? '⚠ Repeated position — one more repeat means a draw!' : '';
     const winLine = findWinLine(newBoard, gs.currentPlayer);
     if (winLine) {
-      await pushState({
-        board: newBoard, positionHistory: hist,
-        gameOver: true, winLine,
+      await pushState({ board: newBoard, positionHistory: hist, gameOver: true, winLine,
         stalemateWarn: '', currentPlayer: gs.currentPlayer,
-        placed: gs.placed, phase: gs.phase
-      });
+        placed: gs.placed, phase: gs.phase });
       setTimeout(() => showWin(gs.currentPlayer), 100);
       return;
     }
 
     const nextP = gs.currentPlayer === 1 ? 2 : 1;
-    await pushState({
-      board: newBoard, positionHistory: hist,
-      currentPlayer: nextP, phase: gs.phase,
-      gameOver: false, winLine: null, stalemateWarn: warn,
-      placed: gs.placed
-    });
+    await pushState({ board: newBoard, positionHistory: hist, currentPlayer: nextP,
+      phase: gs.phase, gameOver: false, winLine: null,
+      stalemateWarn: warn, placed: gs.placed });
   }
 }
 
@@ -1111,26 +1049,18 @@ function renderAll() {
   renderBlocker();
   document.getElementById('stalemate-warn').textContent = gameState.stalemateWarn || '';
 
-  if (gameState.gameOver && !gameState.winLine) {
-    // stalemate draw
+  if (gameState.gameOver) {
     if (!document.getElementById('overlay').classList.contains('show')) {
-      showDraw();
-    }
-  } else if (gameState.gameOver && gameState.winLine) {
-    if (!document.getElementById('overlay').classList.contains('show')) {
-      showWin(gameState.currentPlayer);
+      gameState.winLine ? showWin(gameState.currentPlayer) : showDraw();
     }
   }
 }
 
 function renderBlocker() {
   const bl = document.getElementById('board-block');
-  // Block if it's not my turn OR game is over (use overlay) OR waiting
-  if (!gameState || gameState.gameOver || !isMyTurn()) {
-    bl.classList.add('active');
-  } else {
-    bl.classList.remove('active');
-  }
+  (!gameState || gameState.gameOver || !isMyTurn())
+    ? bl.classList.add('active')
+    : bl.classList.remove('active');
 }
 
 function renderSVG() {
@@ -1149,35 +1079,26 @@ function renderSVG() {
 function renderPoints() {
   document.querySelectorAll('.point').forEach(el => el.remove());
   if (!gameState) return;
-
-  const wrap  = document.getElementById('board-wrap');
-  const bSize = wrap.getBoundingClientRect().width;
-  const scale = bSize / BSIZE;
-  const gs    = gameState;
+  const wrap = document.getElementById('board-wrap');
+  const scale = wrap.getBoundingClientRect().width / BSIZE;
+  const gs = gameState;
 
   for (let i = 0; i < 9; i++) {
     if (gs.board[i] !== null) continue;
-
     const {x, y} = ptPos(i);
-    const el = document.createElement('div');
+    const el  = document.createElement('div');
     el.className = 'point';
     el.style.left = (x * scale) + 'px';
     el.style.top  = (y * scale) + 'px';
-
     const dot = document.createElement('div');
     dot.className = 'point-dot';
     el.appendChild(dot);
 
-    const isHL =
-      !gs.gameOver &&
-      isMyTurn() &&
-      gs.phase === 'move' &&
-      localSel !== null &&
-      gs.board[i] === null &&
+    const isHL = !gs.gameOver && isMyTurn() && gs.phase === 'move' &&
+      localSel !== null && gs.board[i] === null &&
       (houseRules || ADJ[localSel].includes(i));
 
     if (isHL) el.classList.add('highlight');
-
     el.addEventListener('click', () => handlePointClick(i));
     wrap.appendChild(el);
   }
@@ -1186,11 +1107,9 @@ function renderPoints() {
 function renderTokens() {
   document.querySelectorAll('.token').forEach(el => el.remove());
   if (!gameState) return;
-
-  const wrap  = document.getElementById('board-wrap');
-  const bSize = wrap.getBoundingClientRect().width;
-  const scale = bSize / BSIZE;
-  const gs    = gameState;
+  const wrap = document.getElementById('board-wrap');
+  const scale = wrap.getBoundingClientRect().width / BSIZE;
+  const gs = gameState;
 
   for (let i = 0; i < 9; i++) {
     if (gs.board[i] === null) continue;
@@ -1213,27 +1132,21 @@ function renderTokens() {
 function renderStatus() {
   if (!gameState) return;
   const gs = gameState;
-
   document.getElementById('phase-name').textContent = gs.phase === 'drop' ? 'Drop Phase' : 'Move Phase';
 
   let turnMsg;
-  if (gs.gameOver) {
-    turnMsg = 'Game over';
-  } else if (!gs.players?.p2) {
-    turnMsg = 'Waiting for opponent…';
-  } else if (!isMyTurn()) {
-    turnMsg = `Waiting for Player ${gs.currentPlayer}…`;
-  } else if (gs.phase === 'drop') {
-    turnMsg = 'Your turn — place a piece';
-  } else if (localSel !== null) {
-    turnMsg = 'Your turn — choose destination';
-  } else {
-    turnMsg = 'Your turn — select a piece';
-  }
+  if (gs.gameOver)          turnMsg = 'Game over';
+  else if (!gs.players?.p2) turnMsg = 'Waiting for opponent…';
+  else if (!isMyTurn())     turnMsg = `Waiting for Player ${gs.currentPlayer}…`;
+  else if (gs.phase === 'drop')      turnMsg = 'Your turn — place a piece';
+  else if (localSel !== null)        turnMsg = 'Your turn — choose destination';
+  else                               turnMsg = 'Your turn — select a piece';
 
   document.getElementById('turn-text').textContent = turnMsg;
-  document.getElementById('p1-display').className = `player-token-display p1${gs.currentPlayer===1 && !gs.gameOver ? ' active' : ''}`;
-  document.getElementById('p2-display').className = `player-token-display p2${gs.currentPlayer===2 && !gs.gameOver ? ' active' : ''}`;
+  document.getElementById('p1-display').className =
+    `player-token-display p1${gs.currentPlayer===1 && !gs.gameOver ? ' active' : ''}`;
+  document.getElementById('p2-display').className =
+    `player-token-display p2${gs.currentPlayer===2 && !gs.gameOver ? ' active' : ''}`;
 }
 
 function renderPips() {
@@ -1258,7 +1171,6 @@ function highlightWinLine(winLine) {
   });
 }
 
-// ── Win / Draw overlays ──────────────────────────────────────────────────────
 function showWin(player) {
   document.getElementById('msg-icon').textContent  = player === 1 ? '🪙' : '🔵';
   document.getElementById('msg-title').textContent = player === myPlayer ? 'You Win!' : 'You Lose!';
@@ -1284,7 +1196,7 @@ async function rematchGame() {
   if (!roomRef) return;
   hideOverlay();
   const fresh = freshState();
-  fresh.players = { p1: true, p2: true };
+  fresh.players    = { p1: true, p2: true };
   fresh.houseRules = houseRules;
   await set(roomRef, fresh);
   localSel = null;
@@ -1309,7 +1221,6 @@ document.getElementById('join-input').addEventListener('keydown', e => {
 
 window.addEventListener('resize', () => { renderTokens(); renderPoints(); });
 
-// Start at lobby
 showLobby();
 </script>
 </body>
