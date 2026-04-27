@@ -357,477 +357,145 @@
 </div>
 
 <script type="module">
-import { initializeApp }
-  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getDatabase, ref, set, get, onValue, update, off, remove }
-  from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
-
-const app = initializeApp({
-  apiKey:            "AIzaSyDDZUxJINDqh1DytLd-sjsQ5lOQz4BLDPQ",
-  authDomain:        "soyet-d2eb2.firebaseapp.com",
-  databaseURL:       "https://soyet-d2eb2-default-rtdb.firebaseio.com",
-  projectId:         "soyet-d2eb2",
-  storageBucket:     "soyet-d2eb2.firebasestorage.app",
-  messagingSenderId: "785114975207",
-  appId:             "1:785114975207:web:44c9e78adbf59118258b42"
-});
-const db = getDatabase(app);
-
-// ── Board geometry ────────────────────────────────────────────────────────────
-const PAD = 70, BSIZE = 420, STEP = (BSIZE - PAD * 2) / 2;
-const ptPos = i => ({ x: PAD + (i % 3) * STEP, y: PAD + Math.floor(i / 3) * STEP });
-
-const EDGES = [
-  [0,1],[1,2],[3,4],[4,5],[6,7],[7,8],
-  [0,3],[3,6],[1,4],[4,7],[2,5],[5,8],
-  [0,4],[4,8],[2,4],[4,6]
-];
-const ADJ = Array.from({ length: 9 }, () => []);
-for (const [a, b] of EDGES) { ADJ[a].push(b); ADJ[b].push(a); }
-const WIN_LINES = [
-  [0,1,2],[3,4,5],[6,7,8],
-  [0,3,6],[1,4,7],[2,5,8],
-  [0,4,8],[2,4,6]
-];
-
-// ── State ─────────────────────────────────────────────────────────────────────
-let myPlayer   = null;
-let roomCode   = null;
-let roomRef    = null;
-let gameState  = null;
-let localSel   = null;
-let houseRules = false;
-// bothIn is kept locally — never stored as a Firebase boolean to avoid
-// the "false gets omitted" problem. P2 joining is detected via the 'joined' field.
-let bothIn = false;
-
-// ── Firebase array safety ─────────────────────────────────────────────────────
-// Firebase strips null slots from arrays. We store board as {"0":v,...,"8":v}
-// and placed as {"0":n,"1":n} so all slots survive round-trips.
-
-function boardToObj(arr) {
-  const o = {};
-  for (let i = 0; i < 9; i++) o[i] = arr[i] === undefined ? null : arr[i];
-  return o;
-}
-
-function objToBoard(o) {
-  return Array.from({ length: 9 }, (_, i) =>
-    (o != null && o[i] != null) ? o[i] : null
-  );
-}
-
-function normalize(raw) {
-  const board  = objToBoard(raw.board);
-  const p0     = raw.placed ? Number(raw.placed[0] ?? raw.placed['0'] ?? 0) : 0;
-  const p1     = raw.placed ? Number(raw.placed[1] ?? raw.placed['1'] ?? 0) : 0;
-  const placed = [p0, p1];
-  const positionHistory = raw.positionHistory
-    ? (Array.isArray(raw.positionHistory) ? raw.positionHistory : Object.values(raw.positionHistory))
-    : [];
-  const winLine = raw.winLine
-    ? (Array.isArray(raw.winLine) ? raw.winLine : Object.values(raw.winLine))
-    : null;
-  return { ...raw, board, placed, positionHistory, winLine };
-}
-
-function freshState() {
-  return {
-    board:           boardToObj(Array(9).fill(null)),
-    currentPlayer:   1,
-    phase:           'drop',
-    placed:          { 0: 0, 1: 0 },
-    positionHistory: [],
-    gameOver:        false,
-    stalemateWarn:   '',
-    winLine:         null,
-    houseRules:      false,
-    joined:          1,   // number of players joined: 1 = waiting, 2 = game on
-  };
-}
-
-async function pushState(patch) {
-  if (!roomRef) return;
-  const w = { ...patch };
-  if (patch.board)  w.board  = boardToObj(patch.board);
-  if (patch.placed) w.placed = { 0: patch.placed[0], 1: patch.placed[1] };
-  await update(roomRef, w);
-}
-
-// ── Connection badge ──────────────────────────────────────────────────────────
-const badge = document.getElementById('conn-badge');
-function setBadge(cls, txt) { badge.className = cls; badge.textContent = txt; }
-onValue(ref(db, '.info/connected'), s =>
-  setBadge(s.val() ? 'online' : 'offline', s.val() ? 'ONLINE' : 'OFFLINE')
-);
-
-// ── Screens ───────────────────────────────────────────────────────────────────
-function showLobby() {
-  document.getElementById('lobby').classList.remove('hidden');
-  document.getElementById('waiting-screen').classList.add('hidden');
-  document.getElementById('game-screen').classList.add('hidden');
-  document.getElementById('lobby-error').textContent = '';
-}
-function showWaiting(code) {
-  document.getElementById('lobby').classList.add('hidden');
-  document.getElementById('waiting-screen').classList.remove('hidden');
-  document.getElementById('game-screen').classList.add('hidden');
-  document.getElementById('display-room-code').textContent = code;
-}
-function showGame() {
-  document.getElementById('lobby').classList.add('hidden');
-  document.getElementById('waiting-screen').classList.add('hidden');
-  document.getElementById('game-screen').classList.remove('hidden');
-  document.getElementById('role-badge').style.display = 'block';
-  document.getElementById('role-num').textContent = myPlayer;
-  document.getElementById('room-strip').style.display = 'flex';
-  document.getElementById('strip-room-code').textContent = roomCode;
-}
-
-// ── Create room ───────────────────────────────────────────────────────────────
-document.getElementById('btn-create').addEventListener('click', async () => {
-  const code = Math.random().toString(36).substring(2, 8).toUpperCase();
-  roomCode = code;
-  roomRef  = ref(db, 'rooms/' + code);
-  await set(roomRef, freshState());
-  myPlayer = 1;
-  bothIn   = false;
-  showWaiting(code);
-  setBadge('waiting', 'WAITING');
-  subscribeRoom();
-});
-
-// ── Join room ─────────────────────────────────────────────────────────────────
-document.getElementById('btn-join').addEventListener('click', async () => {
-  const code = document.getElementById('join-input').value.trim().toUpperCase();
-  if (code.length < 4) {
-    document.getElementById('lobby-error').textContent = 'Please enter a valid room code.';
-    return;
-  }
-  const snap = await get(ref(db, 'rooms/' + code));
-  if (!snap.exists()) {
-    document.getElementById('lobby-error').textContent = 'Room not found. Check the code and try again.';
-    return;
-  }
-  const data = snap.val();
-  if ((data.joined || 1) >= 2) {
-    document.getElementById('lobby-error').textContent = 'That room is already full.';
-    return;
-  }
-  roomCode = code;
-  roomRef  = ref(db, 'rooms/' + code);
-  myPlayer = 2;
-  bothIn   = true;
-  await update(roomRef, { joined: 2 });   // signal P1 that game can start
-  showGame();
-  setBadge('online', 'ONLINE');
-  subscribeRoom();
-});
-
-// ── Cancel / Leave ────────────────────────────────────────────────────────────
-document.getElementById('btn-cancel-wait').addEventListener('click', async () => {
-  if (roomRef) await remove(roomRef);
-  cleanup(); showLobby();
-});
-document.getElementById('btn-leave').addEventListener('click', async () => {
-  if (roomRef) await remove(roomRef);
-  cleanup(); showLobby(); hideOverlay();
-});
-
-// ── Subscribe ─────────────────────────────────────────────────────────────────
-function subscribeRoom() {
-  onValue(roomRef, snap => {
-    if (!snap.exists()) {
-      cleanup(); showLobby(); setBadge('offline', 'OFFLINE');
-      alert('Your opponent has left the game.');
-      return;
-    }
-    const raw = snap.val();
-
-    // Detect P2 joining via the numeric 'joined' field (never a false-boolean)
-    if ((raw.joined || 1) >= 2) bothIn = true;
-
-    gameState  = normalize(raw);
-    houseRules = raw.houseRules || false;
-    document.getElementById('btn-house-rules').textContent =
-      `House Rules: ${houseRules ? 'On' : 'Off'}`;
-
-    // P1 moves from waiting screen to game screen when P2 joins
-    if (myPlayer === 1 && bothIn &&
-        !document.getElementById('waiting-screen').classList.contains('hidden')) {
-      showGame();
-      setBadge('online', 'ONLINE');
-    }
-
-    renderAll();
-
-    if (gameState.gameOver && gameState.winLine) {
-      setTimeout(() => highlightWinLine(gameState.winLine), 50);
-    }
+  import { initializeApp }
+    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getDatabase, ref, set, get, onValue, update, off, remove }
+    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+  
+  const app = initializeApp({
+    apiKey: "AIzaSy...",
+    authDomain: "soyet-d2eb2.firebaseapp.com",
+    databaseURL: "https://soyet-d2eb2-default-rtdb.firebaseio.com",
+    projectId: "soyet-d2eb2",
   });
-}
-
-function cleanup() {
-  if (roomRef) off(roomRef);
-  roomRef = roomCode = myPlayer = gameState = localSel = null;
-  bothIn = false;
-}
-
-// ── Turn check ────────────────────────────────────────────────────────────────
-function isMyTurn() {
-  if (!gameState || gameState.gameOver) return false;
-  if (!bothIn) return false;
-  return gameState.currentPlayer === myPlayer;
-}
-
-// ── Game logic ────────────────────────────────────────────────────────────────
-async function handlePointClick(idx) {
-  if (!isMyTurn()) return;
-  const gs = gameState;
-  if (gs.board[idx] !== null) return;
-
-  if (gs.phase === 'drop') {
-    const newBoard  = [...gs.board];
-    newBoard[idx]   = gs.currentPlayer;
-    const newPlaced = [...gs.placed];
-    newPlaced[gs.currentPlayer - 1]++;
-
-    const wl = findWinLine(newBoard, gs.currentPlayer);
-    if (wl) {
-      await pushState({ board: newBoard, placed: newPlaced, gameOver: true, winLine: wl,
-        currentPlayer: gs.currentPlayer, phase: gs.phase,
-        positionHistory: gs.positionHistory, stalemateWarn: '' });
+  const db = getDatabase(app);
+  
+  // ── NEW CONSTANT ──
+  const MOVE_LIMIT = 50;
+  
+  // ── UPDATED freshState ──
+  function freshState() {
+    return {
+      board: boardToObj(Array(9).fill(null)),
+      currentPlayer: 1,
+      phase: 'drop',
+      placed: { 0: 0, 1: 0 },
+      gameOver: false,
+      winLine: null,
+      houseRules: false,
+      joined: 1,
+      moveCount: 0 // ✅ NEW
+    };
+  }
+  
+  // ── UPDATED MOVE LOGIC ──
+  async function handlePointClick(idx) {
+    if (!isMyTurn()) return;
+    const gs = gameState;
+    if (gs.board[idx] !== null) return;
+  
+    if (gs.phase === 'drop') {
+      const newBoard = [...gs.board];
+      newBoard[idx] = gs.currentPlayer;
+  
+      const newPlaced = [...gs.placed];
+      newPlaced[gs.currentPlayer - 1]++;
+  
+      const wl = findWinLine(newBoard, gs.currentPlayer);
+      if (wl) {
+        await pushState({ board: newBoard, placed: newPlaced, gameOver: true, winLine: wl });
+        return;
+      }
+  
+      const nextP = gs.currentPlayer === 1 ? 2 : 1;
+      const newPhase = (newPlaced[0] === 3 && newPlaced[1] === 3) ? 'move' : 'drop';
+  
+      await pushState({
+        board: newBoard,
+        placed: newPlaced,
+        currentPlayer: nextP,
+        phase: newPhase
+      });
       return;
     }
-    const nextP    = gs.currentPlayer === 1 ? 2 : 1;
-    const newPhase = (newPlaced[0] === 3 && newPlaced[1] === 3) ? 'move' : 'drop';
-    await pushState({ board: newBoard, placed: newPlaced, currentPlayer: nextP,
-      phase: newPhase, gameOver: false, winLine: null,
-      positionHistory: gs.positionHistory, stalemateWarn: '' });
-    localSel = null;
-    return;
-  }
-
-  if (gs.phase === 'move' && localSel !== null) {
-    const canMove = houseRules || ADJ[localSel].includes(idx);
-    if (!canMove) return;
-
-    const newBoard     = [...gs.board];
-    newBoard[idx]      = newBoard[localSel];
-    newBoard[localSel] = null;
-    localSel = null;
-
-    const snapStr = newBoard.join('');
-    const hist    = [...gs.positionHistory, snapStr];
-    const repeats = hist.filter(s => s === snapStr).length;
-
-    if (repeats > 2) {
-      await pushState({ board: newBoard, positionHistory: hist,
-        gameOver: true, winLine: null, stalemateWarn: '' });
-      return;
-    }
-
-    const warn = repeats === 2
-      ? '⚠ Repeated position — one more repeat means a draw!'
-      : '';
-    const wl = findWinLine(newBoard, gs.currentPlayer);
-    if (wl) {
-      await pushState({ board: newBoard, positionHistory: hist, gameOver: true, winLine: wl,
-        stalemateWarn: '', currentPlayer: gs.currentPlayer, placed: gs.placed, phase: gs.phase });
-      return;
-    }
-    const nextP = gs.currentPlayer === 1 ? 2 : 1;
-    await pushState({ board: newBoard, positionHistory: hist, currentPlayer: nextP,
-      phase: gs.phase, gameOver: false, winLine: null,
-      stalemateWarn: warn, placed: gs.placed });
-  }
-}
-
-function handleTokenClick(idx) {
-  if (!isMyTurn()) return;
-  if (!gameState || gameState.phase !== 'move') return;
-  if (gameState.board[idx] !== myPlayer) return;
-  localSel = (localSel === idx) ? null : idx;
-  renderTokens(); renderPoints(); renderStatus();
-}
-
-function findWinLine(board, player) {
-  for (const line of WIN_LINES)
-    if (line.every(i => board[i] === player)) return line;
-  return null;
-}
-
-// ── Rendering ─────────────────────────────────────────────────────────────────
-function renderAll() {
-  if (!gameState) return;
-  renderSVG();
-  renderTokens();
-  renderPoints();
-  renderStatus();
-  renderPips();
-  document.getElementById('stalemate-warn').textContent = gameState.stalemateWarn || '';
-  if (gameState.gameOver && !document.getElementById('overlay').classList.contains('show')) {
-    gameState.winLine ? showWin(gameState.currentPlayer) : showDraw();
-  }
-}
-
-function renderSVG() {
-  const svg = document.getElementById('board-svg');
-  svg.innerHTML = '';
-  for (const [a, b] of EDGES) {
-    const pa = ptPos(a), pb = ptPos(b);
-    const el = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-    el.setAttribute('x1', pa.x); el.setAttribute('y1', pa.y);
-    el.setAttribute('x2', pb.x); el.setAttribute('y2', pb.y);
-    el.setAttribute('class', 'board-line');
-    svg.appendChild(el);
-  }
-}
-
-function renderPoints() {
-  document.querySelectorAll('.point').forEach(e => e.remove());
-  if (!gameState) return;
-  const wrap  = document.getElementById('board-wrap');
-  const scale = wrap.getBoundingClientRect().width / BSIZE;
-  const gs    = gameState;
-
-  for (let i = 0; i < 9; i++) {
-    if (gs.board[i] !== null) continue;
-    const { x, y } = ptPos(i);
-    const el  = document.createElement('div');
-    el.className  = 'point';
-    el.style.left = (x * scale) + 'px';
-    el.style.top  = (y * scale) + 'px';
-    const dot = document.createElement('div');
-    dot.className = 'point-dot';
-    el.appendChild(dot);
-
-    const isHL = !gs.gameOver && isMyTurn() && gs.phase === 'move'
-      && localSel !== null && (houseRules || ADJ[localSel].includes(i));
-    if (isHL) el.classList.add('highlight');
-
-    el.addEventListener('click', () => handlePointClick(i));
-    wrap.appendChild(el);
-  }
-}
-
-function renderTokens() {
-  document.querySelectorAll('.token').forEach(e => e.remove());
-  if (!gameState) return;
-  const wrap  = document.getElementById('board-wrap');
-  const scale = wrap.getBoundingClientRect().width / BSIZE;
-  const gs    = gameState;
-
-  for (let i = 0; i < 9; i++) {
-    if (gs.board[i] === null) continue;
-    const { x, y } = ptPos(i);
-    const el = document.createElement('div');
-    el.className   = `token p${gs.board[i]}`;
-    el.style.left  = (x * scale) + 'px';
-    el.style.top   = (y * scale) + 'px';
-    el.dataset.idx = i;
-
-    const canSel = !gs.gameOver && gs.phase === 'move'
-      && gs.board[i] === myPlayer && isMyTurn();
-    if (canSel) {
-      el.classList.add('selectable');
-      if (localSel === i) el.classList.add('selected');
-      el.addEventListener('click', () => handleTokenClick(i));
-    }
-    wrap.appendChild(el);
-  }
-}
-
-function renderStatus() {
-  if (!gameState) return;
-  const gs = gameState;
-  document.getElementById('phase-name').textContent =
-    gs.phase === 'drop' ? 'Drop Phase' : 'Move Phase';
-
-  let msg;
-  if (gs.gameOver)        msg = 'Game over';
-  else if (!bothIn)       msg = 'Waiting for opponent…';
-  else if (!isMyTurn())   msg = `Waiting for Player ${gs.currentPlayer}…`;
-  else if (gs.phase === 'drop') msg = 'Your turn — place a piece';
-  else if (localSel !== null)   msg = 'Your turn — choose destination';
-  else                          msg = 'Your turn — select a piece';
-
-  document.getElementById('turn-text').textContent = msg;
-  document.getElementById('p1-display').className =
-    `player-token-display p1${gs.currentPlayer === 1 && !gs.gameOver ? ' active' : ''}`;
-  document.getElementById('p2-display').className =
-    `player-token-display p2${gs.currentPlayer === 2 && !gs.gameOver ? ' active' : ''}`;
-}
-
-function renderPips() {
-  if (!gameState) return;
-  const placed = gameState.placed;
-  for (let p = 1; p <= 2; p++) {
-    const c = document.getElementById(`p${p}-pips`);
-    c.innerHTML = '';
-    for (let j = 0; j < 3; j++) {
-      const pip = document.createElement('div');
-      pip.className = `pip p${p}-pip${j < placed[p - 1] ? ' used' : ''}`;
-      c.appendChild(pip);
+  
+    if (gs.phase === 'move' && localSel !== null) {
+      const canMove = houseRules || ADJ[localSel].includes(idx);
+      if (!canMove) return;
+  
+      const newBoard = [...gs.board];
+      newBoard[idx] = newBoard[localSel];
+      newBoard[localSel] = null;
+      localSel = null;
+  
+      const newMoveCount = (gs.moveCount || 0) + 1;
+  
+      // ✅ WIN CHECK
+      const wl = findWinLine(newBoard, gs.currentPlayer);
+      if (wl) {
+        await pushState({
+          board: newBoard,
+          gameOver: true,
+          winLine: wl,
+          moveCount: newMoveCount
+        });
+        return;
+      }
+  
+      // ✅ MOVE LIMIT RULE
+      if (newMoveCount >= MOVE_LIMIT) {
+        await pushState({
+          board: newBoard,
+          gameOver: true,
+          winLine: null,
+          winner: gs.currentPlayer, // last mover wins
+          moveCount: newMoveCount
+        });
+        return;
+      }
+  
+      const nextP = gs.currentPlayer === 1 ? 2 : 1;
+  
+      await pushState({
+        board: newBoard,
+        currentPlayer: nextP,
+        phase: gs.phase,
+        moveCount: newMoveCount
+      });
     }
   }
-}
-
-function highlightWinLine(wl) {
-  if (!wl) return;
-  wl.forEach(i => {
-    const el = document.querySelector(`.token[data-idx="${i}"]`);
-    if (el) el.classList.add('winner');
-  });
-}
-
-function showWin(player) {
-  document.getElementById('msg-icon').textContent  = player === 1 ? '🪙' : '🔵';
-  document.getElementById('msg-title').textContent = player === myPlayer ? 'You Win!' : 'You Lose!';
-  document.getElementById('msg-body').textContent  = player === myPlayer
-    ? 'Three in a row — victory is yours!'
-    : 'Your opponent got three in a row.';
-  document.getElementById('overlay').classList.add('show');
-}
-
-function showDraw() {
-  document.getElementById('msg-icon').textContent  = '⚖️';
-  document.getElementById('msg-title').textContent = 'Draw!';
-  document.getElementById('msg-body').textContent  = 'The same position repeated — the game ends in a stalemate.';
-  document.getElementById('overlay').classList.add('show');
-}
-
-function hideOverlay() {
-  document.getElementById('overlay').classList.remove('show');
-}
-
-// ── Controls ──────────────────────────────────────────────────────────────────
-async function rematch() {
-  if (!roomRef) return;
-  hideOverlay();
-  localSel = null;
-  const fresh = freshState();
-  fresh.joined     = 2;
-  fresh.houseRules = houseRules;
-  await set(roomRef, fresh);
-}
-
-document.getElementById('btn-restart').addEventListener('click', rematch);
-document.getElementById('btn-restart-ctrl').addEventListener('click', rematch);
-document.getElementById('btn-house-rules').addEventListener('click', async function () {
-  houseRules = !houseRules;
-  this.textContent = `House Rules: ${houseRules ? 'On' : 'Off'}`;
-  if (roomRef) await update(roomRef, { houseRules });
-});
-document.getElementById('help-toggle').addEventListener('click', () =>
-  document.getElementById('help-panel').classList.toggle('open')
-);
-document.getElementById('join-input').addEventListener('keydown', e => {
-  if (e.key === 'Enter') document.getElementById('btn-join').click();
-});
-window.addEventListener('resize', () => { renderTokens(); renderPoints(); });
-
-showLobby();
-</script>
+  
+  // ── UPDATED RENDER ──
+  function renderAll() {
+    if (!gameState) return;
+  
+    renderSVG();
+    renderTokens();
+    renderPoints();
+    renderStatus();
+    renderPips();
+  
+    if (gameState.gameOver &&
+        !document.getElementById('overlay').classList.contains('show')) {
+  
+      if (gameState.winLine) {
+        showWin(gameState.currentPlayer);
+      } else {
+        showLimitWin(gameState.winner);
+      }
+    }
+  }
+  
+  // ── NEW WIN BY LIMIT UI ──
+  function showLimitWin(player) {
+    document.getElementById('msg-icon').textContent = '⏳';
+    document.getElementById('msg-title').textContent =
+      player === myPlayer ? 'You Win!' : 'You Lose!';
+    document.getElementById('msg-body').textContent =
+      'Move limit reached — last move wins!';
+    document.getElementById('overlay').classList.add('show');
+  }
+  
+  </script>
 </body>
 </html>
