@@ -264,6 +264,59 @@
   .help-panel p  { font-size:0.85rem; color:var(--text-dim); line-height:1.6; margin-bottom:8px; }
   .help-panel strong { color:var(--text); font-weight:600; }
   .hidden { display:none !important; }
+
+  /* ── Piece Picker ─────────────────────────────────────────────────── */
+  #piece-picker {
+    display:flex; flex-direction:column; align-items:center;
+    gap:16px; width:min(85vw,380px); position:relative; z-index:1;
+  }
+  .picker-card {
+    background:linear-gradient(160deg,#2a1a08,#1a0d03);
+    border:1px solid rgba(200,146,58,0.3); border-radius:12px;
+    padding:28px 32px; width:100%; text-align:center;
+  }
+  .picker-card h2 {
+    font-family:'Cinzel',serif; font-size:0.8rem; letter-spacing:0.2em;
+    color:var(--accent); text-transform:uppercase; margin-bottom:6px;
+  }
+  .picker-subtitle {
+    color:var(--text-dim); font-style:italic; font-size:0.82rem; margin-bottom:18px;
+  }
+  .piece-grid {
+    display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:18px;
+  }
+  .piece-option {
+    display:flex; flex-direction:column; align-items:center; gap:6px;
+    cursor:pointer; padding:8px 4px; border-radius:8px;
+    border:2px solid transparent; transition:all 0.2s ease;
+  }
+  .piece-option:hover { border-color:rgba(200,146,58,0.4); background:rgba(200,146,58,0.06); }
+  .piece-option.selected { border-color:var(--line-glow); background:rgba(200,146,58,0.12); }
+  .piece-preview {
+    width:38px; height:38px; border-radius:50%; flex-shrink:0;
+    box-shadow:0 3px 10px rgba(0,0,0,0.5);
+  }
+  .piece-preview::after {
+    content:''; display:block; width:100%; height:100%; border-radius:50%;
+    background:radial-gradient(circle at 35% 25%,rgba(255,255,255,0.4) 0%,transparent 55%);
+  }
+  .piece-label {
+    font-family:'Cinzel',serif; font-size:0.55rem; letter-spacing:0.1em;
+    color:var(--text-dim); text-transform:uppercase; text-align:center;
+  }
+  .piece-option.selected .piece-label { color:var(--accent); }
+  .picker-waiting {
+    color:var(--text-dim); font-style:italic; font-size:0.85rem;
+    display:flex; align-items:center; gap:8px; justify-content:center; margin-top:8px;
+  }
+  .vs-row {
+    display:flex; align-items:center; justify-content:center; gap:20px; margin:8px 0 16px;
+  }
+  .vs-piece { display:flex; flex-direction:column; align-items:center; gap:6px; }
+  .vs-piece-circle { width:46px; height:46px; border-radius:50%; box-shadow:0 3px 10px rgba(0,0,0,0.5); border:2px solid rgba(200,146,58,0.3); }
+  .vs-piece-circle.empty { background:rgba(255,255,255,0.05); border-style:dashed; }
+  .vs-label { font-family:'Cinzel',serif; font-size:0.6rem; letter-spacing:0.12em; color:var(--text-dim); text-transform:uppercase; }
+  .vs-sep { font-family:'Cinzel',serif; font-size:1.1rem; color:var(--text-dim); }
 </style>
 </head>
 <body>
@@ -299,6 +352,34 @@
       <div class="dot-pulse"><span></span><span></span><span></span></div>
     </div>
     <button class="btn-sm" style="margin-top:16px;width:100%;" id="btn-cancel-wait">Cancel</button>
+  </div>
+</div>
+
+<!-- PIECE PICKER -->
+<div id="piece-picker" class="hidden">
+  <div class="picker-card">
+    <h2>Choose Your Piece</h2>
+    <p class="picker-subtitle">Pick the piece you'll play with</p>
+    <div class="piece-grid" id="piece-grid"></div>
+    <button class="btn-primary" id="btn-confirm-piece" disabled style="opacity:0.5;">Confirm Choice</button>
+    <div class="picker-waiting hidden" id="picker-waiting">
+      Waiting for opponent to choose
+      <div class="dot-pulse"><span></span><span></span><span></span></div>
+    </div>
+  </div>
+  <div class="picker-card" style="padding:16px 32px;">
+    <p class="picker-subtitle" style="margin-bottom:10px;">Preview</p>
+    <div class="vs-row">
+      <div class="vs-piece">
+        <div class="vs-label">You</div>
+        <div class="vs-piece-circle empty" id="preview-mine"></div>
+      </div>
+      <div class="vs-sep">vs</div>
+      <div class="vs-piece">
+        <div class="vs-label">Opponent</div>
+        <div class="vs-piece-circle empty" id="preview-opp"></div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -385,12 +466,26 @@ const WIN_LINES = [
   [0,4,8],[2,4,6]
 ];
 
+// ── Piece styles ──────────────────────────────────────────────────────────────
+const PIECES = [
+  { name:'Gold',    bg:'radial-gradient(circle at 35% 30%,#fff5d0,#e8d5a0 55%,#c4a84a)',  sel:'rgba(232,213,160,0.8)' },
+  { name:'Ocean',   bg:'radial-gradient(circle at 35% 30%,#80d0f0,#2a6b8a 55%,#1a4a63)',  sel:'rgba(42,107,138,0.9)'  },
+  { name:'Ember',   bg:'radial-gradient(circle at 35% 30%,#ffcc80,#e05a00 55%,#8a2a00)',  sel:'rgba(224,90,0,0.8)'    },
+  { name:'Jade',    bg:'radial-gradient(circle at 35% 30%,#b0f0b0,#2a8a4a 55%,#0a4a20)',  sel:'rgba(42,138,74,0.8)'   },
+  { name:'Amethyst',bg:'radial-gradient(circle at 35% 30%,#e0b0ff,#7a3aaa 55%,#3a0a6a)',  sel:'rgba(122,58,170,0.8)'  },
+  { name:'Rose',    bg:'radial-gradient(circle at 35% 30%,#ffb0c0,#c03060 55%,#700030)',   sel:'rgba(192,48,96,0.8)'   },
+  { name:'Ice',     bg:'radial-gradient(circle at 35% 30%,#ffffff,#b0d8f0 55%,#6090b0)',   sel:'rgba(176,216,240,0.8)' },
+  { name:'Obsidian',bg:'radial-gradient(circle at 35% 30%,#888,#333 55%,#111)',            sel:'rgba(80,80,80,0.8)'    },
+];
+
 // ── State ─────────────────────────────────────────────────────────────────────
 let myPlayer   = null;
 let roomCode   = null;
 let roomRef    = null;
 let gameState  = null;
 let localSel   = null;
+let myPieceIdx  = null;   // index into PIECES chosen by this player
+let oppPieceIdx = null;   // index chosen by opponent
 // bothIn is kept locally — never stored as a Firebase boolean to avoid
 // the "false gets omitted" problem. P2 joining is detected via the 'joined' field.
 let bothIn = false;
@@ -430,6 +525,8 @@ function freshState() {
     placed:          { 0: 0, 1: 0 },
     gameOver:        false,
     winLine:         null,
+    piece1:          null,   // piece index chosen by player 1
+    piece2:          null,   // piece index chosen by player 2
     joined:          1,   // number of players joined: 1 = waiting, 2 = game on
   };
 }
@@ -462,14 +559,61 @@ function showWaiting(code) {
   document.getElementById('game-screen').classList.add('hidden');
   document.getElementById('display-room-code').textContent = code;
 }
+function showPicker() {
+  document.getElementById('lobby').classList.add('hidden');
+  document.getElementById('waiting-screen').classList.add('hidden');
+  document.getElementById('game-screen').classList.add('hidden');
+  document.getElementById('piece-picker').classList.remove('hidden');
+  buildPieceGrid();
+}
+
 function showGame() {
   document.getElementById('lobby').classList.add('hidden');
   document.getElementById('waiting-screen').classList.add('hidden');
+  document.getElementById('piece-picker').classList.add('hidden');
   document.getElementById('game-screen').classList.remove('hidden');
   document.getElementById('role-badge').style.display = 'block';
   document.getElementById('role-num').textContent = myPlayer;
   document.getElementById('room-strip').style.display = 'flex';
   document.getElementById('strip-room-code').textContent = roomCode;
+  applyPieceStyles();
+}
+
+function applyPieceStyles() {
+  const p1idx = myPlayer === 1 ? myPieceIdx : oppPieceIdx;
+  const p2idx = myPlayer === 2 ? myPieceIdx : oppPieceIdx;
+  const p1 = PIECES[p1idx ?? 0];
+  const p2 = PIECES[p2idx ?? 1];
+  let s = document.getElementById('dynamic-piece-styles');
+  if (!s) { s = document.createElement('style'); s.id = 'dynamic-piece-styles'; document.head.appendChild(s); }
+  s.textContent = `
+    .token.p1,.player-token-display.p1{background:${p1.bg};}
+    .token.p1.selected{box-shadow:0 0 24px ${p1.sel},0 6px 16px rgba(0,0,0,0.6);}
+    .pip.p1-pip{background:${p1.bg};}
+    .token.p2,.player-token-display.p2{background:${p2.bg};}
+    .token.p2.selected{box-shadow:0 0 24px ${p2.sel},0 6px 16px rgba(0,0,0,0.6);}
+    .pip.p2-pip{background:${p2.bg};}
+  `;
+}
+
+function buildPieceGrid() {
+  const grid = document.getElementById('piece-grid');
+  grid.innerHTML = '';
+  PIECES.forEach((p, i) => {
+    const el = document.createElement('div');
+    el.className = 'piece-option';
+    el.innerHTML = `<div class="piece-preview" style="background:${p.bg}"></div><div class="piece-label">${p.name}</div>`;
+    el.addEventListener('click', () => {
+      document.querySelectorAll('.piece-option').forEach(e => e.classList.remove('selected'));
+      el.classList.add('selected');
+      myPieceIdx = i;
+      const btn = document.getElementById('btn-confirm-piece');
+      btn.disabled = false; btn.style.opacity = '1';
+      document.getElementById('preview-mine').style.background = p.bg;
+      document.getElementById('preview-mine').classList.remove('empty');
+    });
+    grid.appendChild(el);
+  });
 }
 
 // ── Create room ───────────────────────────────────────────────────────────────
@@ -480,7 +624,7 @@ document.getElementById('btn-create').addEventListener('click', async () => {
   await set(roomRef, freshState());
   myPlayer = 1;
   bothIn   = false;
-  showWaiting(code);
+  showPicker();
   setBadge('waiting', 'WAITING');
   subscribeRoom();
 });
@@ -507,7 +651,7 @@ document.getElementById('btn-join').addEventListener('click', async () => {
   myPlayer = 2;
   bothIn   = true;
   await update(roomRef, { joined: 2 });   // signal P1 that game can start
-  showGame();
+  showPicker();
   setBadge('online', 'ONLINE');
   subscribeRoom();
 });
@@ -520,6 +664,16 @@ document.getElementById('btn-cancel-wait').addEventListener('click', async () =>
 document.getElementById('btn-leave').addEventListener('click', async () => {
   if (roomRef) await remove(roomRef);
   cleanup(); showLobby(); hideOverlay();
+});
+
+// ── Piece confirm ────────────────────────────────────────────────────────────
+document.getElementById('btn-confirm-piece').addEventListener('click', async () => {
+  if (myPieceIdx === null || !roomRef) return;
+  const field = myPlayer === 1 ? 'piece1' : 'piece2';
+  await update(roomRef, { [field]: myPieceIdx });
+  document.getElementById('btn-confirm-piece').disabled = true;
+  document.getElementById('btn-confirm-piece').textContent = 'Waiting…';
+  document.getElementById('picker-waiting').classList.remove('hidden');
 });
 
 // ── Subscribe ─────────────────────────────────────────────────────────────────
@@ -537,18 +691,40 @@ function subscribeRoom() {
 
     gameState  = normalize(raw);
 
-
-    // P1 moves from waiting screen to game screen when P2 joins
+    // P1: once P2 joins, show picker (P1 was on waiting screen)
     if (myPlayer === 1 && bothIn &&
         !document.getElementById('waiting-screen').classList.contains('hidden')) {
+      showPicker();
+      buildPieceGrid();
+      setBadge('online', 'ONLINE');
+    }
+
+    // Sync opponent's piece choice into preview
+    const myField  = myPlayer === 1 ? 'piece1' : 'piece2';
+    const oppField = myPlayer === 1 ? 'piece2' : 'piece1';
+    if (raw[oppField] != null) {
+      oppPieceIdx = raw[oppField];
+      const oppEl = document.getElementById('preview-opp');
+      oppEl.style.background = PIECES[oppPieceIdx].bg;
+      oppEl.classList.remove('empty');
+    }
+
+    // Both pieces chosen → start game
+    const bothPicked = raw.piece1 != null && raw.piece2 != null;
+    const onPicker   = !document.getElementById('piece-picker').classList.contains('hidden');
+    if (bothPicked && onPicker) {
+      myPieceIdx  = raw[myField];
+      oppPieceIdx = raw[oppField];
       showGame();
       setBadge('online', 'ONLINE');
     }
 
-    renderAll();
-
-    if (gameState.gameOver && gameState.winLine) {
-      setTimeout(() => highlightWinLine(gameState.winLine), 50);
+    const gameVisible = !document.getElementById('game-screen').classList.contains('hidden');
+    if (gameVisible) {
+      renderAll();
+      if (gameState.gameOver && gameState.winLine) {
+        setTimeout(() => highlightWinLine(gameState.winLine), 50);
+      }
     }
   });
 }
@@ -556,6 +732,7 @@ function subscribeRoom() {
 function cleanup() {
   if (roomRef) off(roomRef);
   roomRef = roomCode = myPlayer = gameState = localSel = null;
+  myPieceIdx = oppPieceIdx = null;
   bothIn = false;
 }
 
@@ -768,7 +945,9 @@ function highlightWinLine(wl) {
 }
 
 function showWin(player) {
-  document.getElementById('msg-icon').textContent  = player === 1 ? '🪙' : '🔵';
+  const winnerIdx = player === myPlayer ? myPieceIdx : oppPieceIdx;
+  const icons = ['🟡','🔵','🟠','🟢','🟣','🌸','⬜','⬛'];
+  document.getElementById('msg-icon').textContent  = icons[winnerIdx ?? (player === 1 ? 0 : 1)];
   document.getElementById('msg-title').textContent = player === myPlayer ? 'You Win!' : 'You Lose!';
   document.getElementById('msg-body').textContent  = player === myPlayer
     ? 'Three in a row — victory is yours!'
@@ -787,13 +966,26 @@ async function rematch() {
   if (!roomRef) return;
   hideOverlay();
   localSel = null;
+  myPieceIdx = null;
+  oppPieceIdx = null;
   const fresh = freshState();
   // Winner of the last game goes first next round
   if (gameState && gameState.lastWinner) {
     fresh.currentPlayer = gameState.lastWinner;
   }
-  fresh.joined     = 2;
+  fresh.joined = 2;
+  // piece1/piece2 are null in freshState so both players must pick again
   await set(roomRef, fresh);
+  showPicker();
+  buildPieceGrid();
+  document.getElementById('btn-confirm-piece').disabled = false;
+  document.getElementById('btn-confirm-piece').style.opacity = '1';
+  document.getElementById('btn-confirm-piece').textContent = 'Confirm Choice';
+  document.getElementById('picker-waiting').classList.add('hidden');
+  document.getElementById('preview-mine').style.background = '';
+  document.getElementById('preview-mine').classList.add('empty');
+  document.getElementById('preview-opp').style.background = '';
+  document.getElementById('preview-opp').classList.add('empty');
 }
 
 document.getElementById('btn-restart').addEventListener('click', rematch);
