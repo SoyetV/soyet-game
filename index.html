@@ -596,7 +596,8 @@ async function handlePointClick(idx) {
     if (wl) {
       await pushState({ board: newBoard, placed: newPlaced, gameOver: true, winLine: wl,
         currentPlayer: gs.currentPlayer, phase: gs.phase,
-        positionHistory: gs.positionHistory, stalemateWarn: '' });
+        positionHistory: gs.positionHistory, stalemateWarn: '',
+        lastWinner: gs.currentPlayer });
       return;
     }
     const nextP    = gs.currentPlayer === 1 ? 2 : 1;
@@ -618,22 +619,23 @@ async function handlePointClick(idx) {
     localSel = null;
 
     const hist = [...gs.positionHistory, newBoard.join('')];
+    const nextP = gs.currentPlayer === 1 ? 2 : 1;
 
     const wl = findWinLine(newBoard, gs.currentPlayer);
     if (wl) {
       await pushState({
-  board: newBoard,
-  positionHistory: hist,
-  currentPlayer: nextP,
-  phase: gs.phase,
-  gameOver: false,
-  winLine: null,
-  stalemateWarn: '',
-  placed: gs.placed
-});
+        board: newBoard,
+        positionHistory: hist,
+        currentPlayer: gs.currentPlayer,
+        phase: gs.phase,
+        gameOver: true,
+        winLine: wl,
+        stalemateWarn: '',
+        placed: gs.placed,
+        lastWinner: gs.currentPlayer
+      });
       return;
     }
-    const nextP = gs.currentPlayer === 1 ? 2 : 1;
     await pushState({
   board: newBoard,
   positionHistory: hist,
@@ -811,6 +813,10 @@ async function rematch() {
   hideOverlay();
   localSel = null;
   const fresh = freshState();
+  // Winner of the last game goes first next round
+  if (gameState && gameState.lastWinner) {
+    fresh.currentPlayer = gameState.lastWinner;
+  }
   fresh.joined     = 2;
   fresh.houseRules = houseRules;
   await set(roomRef, fresh);
