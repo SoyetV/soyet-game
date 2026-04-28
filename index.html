@@ -547,22 +547,24 @@ onValue(ref(db, '.info/connected'), s =>
 );
 
 // ── Screens ───────────────────────────────────────────────────────────────────
-function showLobby() {
-  document.getElementById('lobby').classList.remove('hidden');
+function hideAllScreens() {
+  document.getElementById('lobby').classList.add('hidden');
   document.getElementById('waiting-screen').classList.add('hidden');
+  document.getElementById('piece-picker').classList.add('hidden');
   document.getElementById('game-screen').classList.add('hidden');
+}
+function showLobby() {
+  hideAllScreens();
+  document.getElementById('lobby').classList.remove('hidden');
   document.getElementById('lobby-error').textContent = '';
 }
 function showWaiting(code) {
-  document.getElementById('lobby').classList.add('hidden');
+  hideAllScreens();
   document.getElementById('waiting-screen').classList.remove('hidden');
-  document.getElementById('game-screen').classList.add('hidden');
   document.getElementById('display-room-code').textContent = code;
 }
 function showPicker() {
-  document.getElementById('lobby').classList.add('hidden');
-  document.getElementById('waiting-screen').classList.add('hidden');
-  document.getElementById('game-screen').classList.add('hidden');
+  hideAllScreens();
   document.getElementById('piece-picker').classList.remove('hidden');
   buildPieceGrid();
 }
