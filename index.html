@@ -624,7 +624,7 @@ document.getElementById('btn-create').addEventListener('click', async () => {
   await set(roomRef, freshState());
   myPlayer = 1;
   bothIn   = false;
-  showPicker();
+  showWaiting(code);
   setBadge('waiting', 'WAITING');
   subscribeRoom();
 });
