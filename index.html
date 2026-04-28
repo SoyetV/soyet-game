@@ -243,7 +243,6 @@
     padding:8px 18px; cursor:pointer; transition:all 0.2s ease;
   }
   .btn-sm:hover { border-color:var(--accent); color:var(--accent); }
-  .stalemate-warning { position:relative; z-index:1; margin-top:10px; font-style:italic; color:#c06030; font-size:0.9rem; min-height:1.2em; text-align:center; }
   .help-toggle {
     position:fixed; bottom:20px; right:20px;
     width:36px; height:36px; border-radius:50%;
@@ -330,10 +329,8 @@
     <div class="board-bg"></div>
     <svg class="board-svg" id="board-svg" viewBox="0 0 420 420"></svg>
   </div>
-  <div class="stalemate-warning" id="stalemate-warn"></div>
   <div class="controls">
     <button class="btn-sm" id="btn-restart-ctrl">New Game</button>
-    <button class="btn-sm" id="btn-house-rules">House Rules: Off</button>
   </div>
 </div>
 
@@ -352,8 +349,6 @@
   <h3>How To Play</h3>
   <p><strong>Drop Phase:</strong> Take turns placing your 3 pieces. Get 3 in a row to win immediately.</p>
   <p><strong>Move Phase:</strong> After all pieces are placed, move one piece per turn to an adjacent point. First to align 3 wins.</p>
-  <p><strong>Stalemate:</strong> If the same position repeats twice, it's a draw.</p>
-  <p><strong>House Rules:</strong> Move to any empty spot (not just adjacent).</p>
 </div>
 
 <script type="module">
@@ -396,7 +391,6 @@ let roomCode   = null;
 let roomRef    = null;
 let gameState  = null;
 let localSel   = null;
-let houseRules = false;
 // bothIn is kept locally — never stored as a Firebase boolean to avoid
 // the "false gets omitted" problem. P2 joining is detected via the 'joined' field.
 let bothIn = false;
@@ -422,13 +416,10 @@ function normalize(raw) {
   const p0     = raw.placed ? Number(raw.placed[0] ?? raw.placed['0'] ?? 0) : 0;
   const p1     = raw.placed ? Number(raw.placed[1] ?? raw.placed['1'] ?? 0) : 0;
   const placed = [p0, p1];
-  const positionHistory = raw.positionHistory
-    ? (Array.isArray(raw.positionHistory) ? raw.positionHistory : Object.values(raw.positionHistory))
-    : [];
   const winLine = raw.winLine
     ? (Array.isArray(raw.winLine) ? raw.winLine : Object.values(raw.winLine))
     : null;
-  return { ...raw, board, placed, positionHistory, winLine };
+  return { ...raw, board, placed, winLine };
 }
 
 function freshState() {
@@ -437,11 +428,8 @@ function freshState() {
     currentPlayer:   1,
     phase:           'drop',
     placed:          { 0: 0, 1: 0 },
-    positionHistory: [],
     gameOver:        false,
-    stalemateWarn:   '',
     winLine:         null,
-    houseRules:      false,
     joined:          1,   // number of players joined: 1 = waiting, 2 = game on
   };
 }
@@ -548,9 +536,7 @@ function subscribeRoom() {
     if ((raw.joined || 1) >= 2) bothIn = true;
 
     gameState  = normalize(raw);
-    houseRules = raw.houseRules || false;
-    document.getElementById('btn-house-rules').textContent =
-      `House Rules: ${houseRules ? 'On' : 'Off'}`;
+
 
     // P1 moves from waiting screen to game screen when P2 joins
     if (myPlayer === 1 && bothIn &&
@@ -596,21 +582,19 @@ async function handlePointClick(idx) {
     if (wl) {
       await pushState({ board: newBoard, placed: newPlaced, gameOver: true, winLine: wl,
         currentPlayer: gs.currentPlayer, phase: gs.phase,
-        positionHistory: gs.positionHistory, stalemateWarn: '',
         lastWinner: gs.currentPlayer });
       return;
     }
     const nextP    = gs.currentPlayer === 1 ? 2 : 1;
     const newPhase = (newPlaced[0] === 3 && newPlaced[1] === 3) ? 'move' : 'drop';
     await pushState({ board: newBoard, placed: newPlaced, currentPlayer: nextP,
-      phase: newPhase, gameOver: false, winLine: null,
-      positionHistory: gs.positionHistory, stalemateWarn: '' });
+      phase: newPhase, gameOver: false, winLine: null });
     localSel = null;
     return;
   }
 
   if (gs.phase === 'move' && localSel !== null) {
-    const canMove = houseRules || ADJ[localSel].includes(idx);
+    const canMove = ADJ[localSel].includes(idx);
     if (!canMove) return;
 
     const newBoard     = [...gs.board];
@@ -618,34 +602,31 @@ async function handlePointClick(idx) {
     newBoard[localSel] = null;
     localSel = null;
 
-    const hist = [...gs.positionHistory, newBoard.join('')];
     const nextP = gs.currentPlayer === 1 ? 2 : 1;
 
+    // Check win first
     const wl = findWinLine(newBoard, gs.currentPlayer);
     if (wl) {
       await pushState({
         board: newBoard,
-        positionHistory: hist,
         currentPlayer: gs.currentPlayer,
         phase: gs.phase,
         gameOver: true,
         winLine: wl,
-        stalemateWarn: '',
         placed: gs.placed,
         lastWinner: gs.currentPlayer
       });
       return;
     }
+
     await pushState({
-  board: newBoard,
-  positionHistory: hist,
-  currentPlayer: nextP,
-  phase: gs.phase,
-  gameOver: false,
-  winLine: null,
-  stalemateWarn: '',
-  placed: gs.placed
-});
+      board: newBoard,
+      currentPlayer: nextP,
+      phase: gs.phase,
+      gameOver: false,
+      winLine: null,
+      placed: gs.placed
+    });
   }
 }
 
@@ -671,9 +652,8 @@ function renderAll() {
   renderPoints();
   renderStatus();
   renderPips();
-  document.getElementById('stalemate-warn').textContent = gameState.stalemateWarn || '';
   if (gameState.gameOver && !document.getElementById('overlay').classList.contains('show')) {
-    gameState.winLine ? showWin(gameState.currentPlayer) : showDraw();
+    if (gameState.winLine) showWin(gameState.currentPlayer);
   }
 }
 
@@ -709,7 +689,7 @@ function renderPoints() {
     el.appendChild(dot);
 
     const isHL = !gs.gameOver && isMyTurn() && gs.phase === 'move'
-      && localSel !== null && (houseRules || ADJ[localSel].includes(i));
+      && localSel !== null && ADJ[localSel].includes(i);
     if (isHL) el.classList.add('highlight');
 
     el.addEventListener('click', () => handlePointClick(i));
@@ -796,12 +776,7 @@ function showWin(player) {
   document.getElementById('overlay').classList.add('show');
 }
 
-function showDraw() {
-  document.getElementById('msg-icon').textContent  = '⚖️';
-  document.getElementById('msg-title').textContent = 'Draw!';
-  document.getElementById('msg-body').textContent  = 'The same position repeated — the game ends in a stalemate.';
-  document.getElementById('overlay').classList.add('show');
-}
+
 
 function hideOverlay() {
   document.getElementById('overlay').classList.remove('show');
@@ -818,17 +793,12 @@ async function rematch() {
     fresh.currentPlayer = gameState.lastWinner;
   }
   fresh.joined     = 2;
-  fresh.houseRules = houseRules;
   await set(roomRef, fresh);
 }
 
 document.getElementById('btn-restart').addEventListener('click', rematch);
 document.getElementById('btn-restart-ctrl').addEventListener('click', rematch);
-document.getElementById('btn-house-rules').addEventListener('click', async function () {
-  houseRules = !houseRules;
-  this.textContent = `House Rules: ${houseRules ? 'On' : 'Off'}`;
-  if (roomRef) await update(roomRef, { houseRules });
-});
+
 document.getElementById('help-toggle').addEventListener('click', () =>
   document.getElementById('help-panel').classList.toggle('open')
 );
