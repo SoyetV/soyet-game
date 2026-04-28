@@ -486,6 +486,7 @@ let gameState  = null;
 let localSel   = null;
 let myPieceIdx  = null;   // index into PIECES chosen by this player
 let oppPieceIdx = null;   // index chosen by opponent
+let myConfirmed = false;  // true once this player confirmed their piece
 // bothIn is kept locally — never stored as a Firebase boolean to avoid
 // the "false gets omitted" problem. P2 joining is detected via the 'joined' field.
 let bothIn = false;
@@ -602,18 +603,24 @@ function buildPieceGrid() {
   const grid = document.getElementById('piece-grid');
   grid.innerHTML = '';
   PIECES.forEach((p, i) => {
+    const taken = (oppPieceIdx === i);  // opponent already chose this
     const el = document.createElement('div');
-    el.className = 'piece-option';
-    el.innerHTML = `<div class="piece-preview" style="background:${p.bg}"></div><div class="piece-label">${p.name}</div>`;
-    el.addEventListener('click', () => {
-      document.querySelectorAll('.piece-option').forEach(e => e.classList.remove('selected'));
-      el.classList.add('selected');
-      myPieceIdx = i;
-      const btn = document.getElementById('btn-confirm-piece');
-      btn.disabled = false; btn.style.opacity = '1';
-      document.getElementById('preview-mine').style.background = p.bg;
-      document.getElementById('preview-mine').classList.remove('empty');
-    });
+    el.className = 'piece-option' + (taken ? ' taken' : '');
+    el.style.opacity = taken ? '0.3' : '1';
+    el.style.pointerEvents = taken ? 'none' : 'auto';
+    el.innerHTML = `<div class="piece-preview" style="background:${p.bg}"></div><div class="piece-label">${taken ? 'Taken' : p.name}</div>`;
+    if (!taken) {
+      el.addEventListener('click', () => {
+        if (myConfirmed) return;
+        document.querySelectorAll('.piece-option').forEach(e => e.classList.remove('selected'));
+        el.classList.add('selected');
+        myPieceIdx = i;
+        const btn = document.getElementById('btn-confirm-piece');
+        btn.disabled = false; btn.style.opacity = '1';
+        document.getElementById('preview-mine').style.background = p.bg;
+        document.getElementById('preview-mine').classList.remove('empty');
+      });
+    }
     grid.appendChild(el);
   });
 }
@@ -671,17 +678,24 @@ document.getElementById('btn-leave').addEventListener('click', async () => {
 // ── Piece confirm ────────────────────────────────────────────────────────────
 document.getElementById('btn-confirm-piece').addEventListener('click', async () => {
   if (myPieceIdx === null || !roomRef) return;
-  const field = myPlayer === 1 ? 'piece1' : 'piece2';
-  // Write my piece choice; if both are now set, also flip phase to 'drop'
+  // Disable immediately so double-clicks and re-renders can't re-enable it
+  const btn = document.getElementById('btn-confirm-piece');
+  btn.disabled = true;
+  btn.style.opacity = '0.5';
+  myConfirmed = true;
+
+  const field      = myPlayer === 1 ? 'piece1' : 'piece2';
+  const otherField = myPlayer === 1 ? 'piece2' : 'piece1';
   const snap = await get(roomRef);
   const raw  = snap.val();
-  const otherField = myPlayer === 1 ? 'piece2' : 'piece1';
   const patch = { [field]: myPieceIdx };
-  if (raw[otherField] != null) patch.phase = 'drop';  // both chosen → start
+  if (raw[otherField] != null) {
+    patch.phase = 'drop';  // both chosen → start immediately, no "Waiting"
+  } else {
+    btn.textContent = 'Waiting for opponent…';
+    document.getElementById('picker-waiting').classList.remove('hidden');
+  }
   await update(roomRef, patch);
-  document.getElementById('btn-confirm-piece').disabled = true;
-  document.getElementById('btn-confirm-piece').textContent = 'Waiting…';
-  document.getElementById('picker-waiting').classList.remove('hidden');
 });
 
 // ── Subscribe ─────────────────────────────────────────────────────────────────
@@ -698,6 +712,10 @@ function subscribeRoom() {
     if ((raw.joined || 1) >= 2) bothIn = true;
 
     gameState  = normalize(raw);
+    // Clear local selection if it's no longer our turn (opponent moved)
+    if (localSel !== null && gameState.currentPlayer !== myPlayer) {
+      localSel = null;
+    }
 
     // P1: once P2 joins, move from waiting screen to picker
     if (myPlayer === 1 && bothIn &&
@@ -724,10 +742,20 @@ function subscribeRoom() {
         // Was on game screen (rematch) — stay, pieces already applied
       } else {
         // Sync opponent piece preview
-        if (raw[oppField] != null) {
+        if (raw[oppField] != null && oppPieceIdx !== raw[oppField]) {
           oppPieceIdx = raw[oppField];
           const oppEl = document.getElementById('preview-opp');
           if (oppEl) { oppEl.style.background = PIECES[oppPieceIdx].bg; oppEl.classList.remove('empty'); }
+          // If my current selection clashes, deselect it
+          if (myPieceIdx === oppPieceIdx && !myConfirmed) {
+            myPieceIdx = null;
+            document.querySelectorAll('.piece-option').forEach(e => e.classList.remove('selected'));
+            document.getElementById('preview-mine').style.background = '';
+            document.getElementById('preview-mine').classList.add('empty');
+            const btn = document.getElementById('btn-confirm-piece');
+            btn.disabled = true; btn.style.opacity = '0.5'; btn.textContent = 'Confirm Choice';
+          }
+          buildPieceGrid();  // re-render with taken piece greyed out
         }
         // Both picked → go to game
         if (raw.piece1 != null && raw.piece2 != null) {
@@ -757,6 +785,7 @@ function cleanup() {
   if (roomRef) off(roomRef);
   roomRef = roomCode = myPlayer = gameState = localSel = null;
   myPieceIdx = oppPieceIdx = null;
+  myConfirmed = false;
   bothIn = false;
 }
 
@@ -764,6 +793,7 @@ function cleanup() {
 function isMyTurn() {
   if (!gameState || gameState.gameOver) return false;
   if (!bothIn) return false;
+  if (gameState.phase !== 'drop' && gameState.phase !== 'move') return false;
   return gameState.currentPlayer === myPlayer;
 }
 
@@ -990,6 +1020,7 @@ async function rematch() {
   if (!roomRef) return;
   hideOverlay();
   localSel = null;
+  myConfirmed = false;
 
   // Only Player 1 writes the new state
   if (myPlayer === 1) {
