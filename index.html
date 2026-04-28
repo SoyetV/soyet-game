@@ -699,14 +699,22 @@ function subscribeRoom() {
       setBadge('online', 'ONLINE');
     }
 
-    // Sync opponent's piece choice into preview
     const myField  = myPlayer === 1 ? 'piece1' : 'piece2';
     const oppField = myPlayer === 1 ? 'piece2' : 'piece1';
+
+    // Detect rematch reset: game was over, now pieces cleared → go back to picker
+    const onGame   = !document.getElementById('game-screen').classList.contains('hidden');
+    const noPieces = raw.piece1 == null && raw.piece2 == null;
+    if (onGame && noPieces && bothIn) {
+      resetPickerUI();
+      return;
+    }
+
+    // Sync opponent's piece choice into preview
     if (raw[oppField] != null) {
       oppPieceIdx = raw[oppField];
       const oppEl = document.getElementById('preview-opp');
-      oppEl.style.background = PIECES[oppPieceIdx].bg;
-      oppEl.classList.remove('empty');
+      if (oppEl) { oppEl.style.background = PIECES[oppPieceIdx].bg; oppEl.classList.remove('empty'); }
     }
 
     // Both pieces chosen → start game
@@ -962,20 +970,9 @@ function hideOverlay() {
 }
 
 // ── Controls ──────────────────────────────────────────────────────────────────
-async function rematch() {
-  if (!roomRef) return;
-  hideOverlay();
-  localSel = null;
+function resetPickerUI() {
   myPieceIdx = null;
   oppPieceIdx = null;
-  const fresh = freshState();
-  // Winner of the last game goes first next round
-  if (gameState && gameState.lastWinner) {
-    fresh.currentPlayer = gameState.lastWinner;
-  }
-  fresh.joined = 2;
-  // piece1/piece2 are null in freshState so both players must pick again
-  await set(roomRef, fresh);
   showPicker();
   buildPieceGrid();
   document.getElementById('btn-confirm-piece').disabled = false;
@@ -986,6 +983,25 @@ async function rematch() {
   document.getElementById('preview-mine').classList.add('empty');
   document.getElementById('preview-opp').style.background = '';
   document.getElementById('preview-opp').classList.add('empty');
+}
+
+async function rematch() {
+  if (!roomRef) return;
+  hideOverlay();
+  localSel = null;
+
+  // Only Player 1 writes the new state to avoid the second writer
+  // overwriting currentPlayer back to 1.
+  if (myPlayer === 1) {
+    const winner = gameState && gameState.lastWinner ? gameState.lastWinner : 1;
+    const fresh = freshState();
+    fresh.currentPlayer = winner;   // winner goes first
+    fresh.lastWinner    = winner;   // keep it so P2's read also sees it
+    fresh.joined        = 2;
+    await set(roomRef, fresh);
+  }
+
+  resetPickerUI();
 }
 
 document.getElementById('btn-restart').addEventListener('click', rematch);
