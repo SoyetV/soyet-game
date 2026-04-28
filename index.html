@@ -517,17 +517,17 @@ function normalize(raw) {
   return { ...raw, board, placed, winLine };
 }
 
-function freshState() {
+function freshState(skipPicking = false) {
   return {
     board:           boardToObj(Array(9).fill(null)),
     currentPlayer:   1,
-    phase:           'drop',
+    phase:           skipPicking ? 'drop' : 'picking',
     placed:          { 0: 0, 1: 0 },
     gameOver:        false,
     winLine:         null,
-    piece1:          null,   // piece index chosen by player 1
-    piece2:          null,   // piece index chosen by player 2
-    joined:          1,   // number of players joined: 1 = waiting, 2 = game on
+    piece1:          null,
+    piece2:          null,
+    joined:          1,
   };
 }
 
@@ -672,7 +672,13 @@ document.getElementById('btn-leave').addEventListener('click', async () => {
 document.getElementById('btn-confirm-piece').addEventListener('click', async () => {
   if (myPieceIdx === null || !roomRef) return;
   const field = myPlayer === 1 ? 'piece1' : 'piece2';
-  await update(roomRef, { [field]: myPieceIdx });
+  // Write my piece choice; if both are now set, also flip phase to 'drop'
+  const snap = await get(roomRef);
+  const raw  = snap.val();
+  const otherField = myPlayer === 1 ? 'piece2' : 'piece1';
+  const patch = { [field]: myPieceIdx };
+  if (raw[otherField] != null) patch.phase = 'drop';  // both chosen → start
+  await update(roomRef, patch);
   document.getElementById('btn-confirm-piece').disabled = true;
   document.getElementById('btn-confirm-piece').textContent = 'Waiting…';
   document.getElementById('picker-waiting').classList.remove('hidden');
@@ -693,49 +699,52 @@ function subscribeRoom() {
 
     gameState  = normalize(raw);
 
-    // P1: once P2 joins, show picker (P1 was on waiting screen)
+    // P1: once P2 joins, move from waiting screen to picker
     if (myPlayer === 1 && bothIn &&
         !document.getElementById('waiting-screen').classList.contains('hidden')) {
-      showPicker();
-      buildPieceGrid();
-      setBadge('online', 'ONLINE');
+      if (raw.phase === 'picking') {
+        showPicker();
+        setBadge('online', 'ONLINE');
+      } else {
+        // Pieces already chosen (shouldn't normally happen, but be safe)
+        myPieceIdx  = raw[myPlayer === 1 ? 'piece1' : 'piece2'] ?? 0;
+        oppPieceIdx = raw[myPlayer === 1 ? 'piece2' : 'piece1'] ?? 1;
+        showGame();
+        setBadge('online', 'ONLINE');
+      }
     }
 
     const myField  = myPlayer === 1 ? 'piece1' : 'piece2';
     const oppField = myPlayer === 1 ? 'piece2' : 'piece1';
 
-    // Detect rematch: pieces are set and game was over → go straight to game
-    const onGame = !document.getElementById('game-screen').classList.contains('hidden');
-    const onPicker2 = !document.getElementById('piece-picker').classList.contains('hidden');
-    if (!onGame && !onPicker2 && raw.piece1 != null && raw.piece2 != null && bothIn) {
-      // P2 receiving rematch state — skip picker, go straight to game
-      const myField2  = myPlayer === 1 ? 'piece1' : 'piece2';
-      const oppField2 = myPlayer === 1 ? 'piece2' : 'piece1';
-      myPieceIdx  = raw[myField2];
-      oppPieceIdx = raw[oppField2];
-      showGame();
-      return;
-    }
-
-    // Sync opponent's piece choice into preview
-    if (raw[oppField] != null) {
-      oppPieceIdx = raw[oppField];
-      const oppEl = document.getElementById('preview-opp');
-      if (oppEl) { oppEl.style.background = PIECES[oppPieceIdx].bg; oppEl.classList.remove('empty'); }
-    }
-
-    // Both pieces chosen → start game
-    const bothPicked = raw.piece1 != null && raw.piece2 != null;
-    const onPicker   = !document.getElementById('piece-picker').classList.contains('hidden');
-    if (bothPicked && onPicker) {
-      myPieceIdx  = raw[myField];
-      oppPieceIdx = raw[oppField];
-      showGame();
-      setBadge('online', 'ONLINE');
-    }
-
-    const gameVisible = !document.getElementById('game-screen').classList.contains('hidden');
-    if (gameVisible) {
+    // Route based on game phase
+    if (raw.phase === 'picking') {
+      // Piece selection phase
+      if (document.getElementById('game-screen').classList.contains('hidden') === false) {
+        // Was on game screen (rematch) — stay, pieces already applied
+      } else {
+        // Sync opponent piece preview
+        if (raw[oppField] != null) {
+          oppPieceIdx = raw[oppField];
+          const oppEl = document.getElementById('preview-opp');
+          if (oppEl) { oppEl.style.background = PIECES[oppPieceIdx].bg; oppEl.classList.remove('empty'); }
+        }
+        // Both picked → go to game
+        if (raw.piece1 != null && raw.piece2 != null) {
+          myPieceIdx  = raw[myField];
+          oppPieceIdx = raw[oppField];
+          showGame();
+          setBadge('online', 'ONLINE');
+        }
+      }
+    } else {
+      // Normal game phase (drop/move) — render game
+      myPieceIdx  = myPieceIdx  ?? raw[myField]  ?? (myPlayer === 1 ? 0 : 1);
+      oppPieceIdx = oppPieceIdx ?? raw[oppField] ?? (myPlayer === 1 ? 1 : 0);
+      if (document.getElementById('game-screen').classList.contains('hidden')) {
+        showGame();
+      }
+      applyPieceStyles();
       renderAll();
       if (gameState.gameOver && gameState.winLine) {
         setTimeout(() => highlightWinLine(gameState.winLine), 50);
@@ -985,18 +994,20 @@ async function rematch() {
   // Only Player 1 writes the new state
   if (myPlayer === 1) {
     const winner = gameState && gameState.lastWinner ? gameState.lastWinner : 1;
-    const fresh = freshState();
+    const fresh = freshState(true);  // skipPicking=true → phase starts as 'drop'
     fresh.currentPlayer = winner;
     fresh.lastWinner    = winner;
     fresh.joined        = 2;
     // Keep the same piece choices — no need to re-pick
-    fresh.piece1 = gameState.piece1 ?? myPieceIdx;
-    fresh.piece2 = gameState.piece2 ?? oppPieceIdx;
+    fresh.piece1 = gameState.piece1 ?? myPieceIdx ?? 0;
+    fresh.piece2 = gameState.piece2 ?? oppPieceIdx ?? 1;
     await set(roomRef, fresh);
   }
 
   // Go straight to game, no picker
   showGame();
+  applyPieceStyles();
+  renderAll();
 }
 
 document.getElementById('btn-restart').addEventListener('click', rematch);
